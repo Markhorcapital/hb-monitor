@@ -1,0 +1,89 @@
+mqtt:
+  # MQTT broker connection settings
+  # Use "emqx" when running in Docker, "localhost" when standalone or via SSH tunnel
+  host: "emqx"
+  port: 1883
+  # Optional authentication (leave empty if not configured)
+  username: ""
+  password: ""
+  # Client ID prefix
+  client_id_prefix: "hb-monitor"
+  # MQTT keepalive interval (seconds)
+  keepalive: 60
+  # Reconnection interval (seconds) - how long to wait before reconnecting
+  reconnect_interval: 5
+
+alerts:
+  # Telegram Bot configuration
+  telegram:
+    enabled: true
+    bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+    chat_id: "YOUR_TELEGRAM_CHAT_ID"
+    # Optional: Format messages with markdown
+    use_markdown: true
+
+filters:
+  # Only monitor these bot IDs (empty list = monitor all bots)
+  # Example: ["bot1", "bot2"]
+  bot_ids: []
+  
+  # Log levels to alert on (applies to log topics once regex pattern passes)
+  log_levels: ["ERROR", "WARNING", "INFO"]  # Include INFO so lifecycle messages appear when bots start/stop
+  
+  # Keywords that trigger alerts when found in log messages
+  alert_keywords:
+    - "drawdown"
+    - "reached max drawdown"
+    - "Global drawdown reached"
+    - "stopping the strategy"
+    - "stopping the controller"
+    - "error"
+    - "failed"
+    - "exception"
+    - "stopped"
+    - "crashed"
+  
+  # Deduplication: prevent duplicate alerts for same event
+  # Time window in seconds
+  deduplication_window: 300
+  
+  # Ignore these keywords (to reduce noise)
+  ignore_keywords:
+    - "DEBUG"
+    - "heartbeat"
+    - "clock stopped successfully"
+
+  # Optional regex filter applied to every channel (case-insensitive).
+  # Only messages matching this pattern are eligible to trigger Telegram alerts.
+  log_filter:
+    pattern: "(drawdown|draw\\s*down|max drawdown|stopping the strategy|stopping the controller|strategy stopped successfully|clock stopped successfully|bot stopped|bot started|offline|online|heartbeat timeout|crashed)"
+
+subscriptions:
+  # Comment out any topics you don't want to subscribe to
+  - topic: "hbot/+/log"
+    qos: 1
+  - topic: "hbot/+/notify"
+    qos: 1
+  - topic: "hbot/+/status_updates"
+    qos: 1
+  - topic: "hbot/+/events"
+    qos: 1
+  - topic: "hbot/+/hb"
+    qos: 1
+
+monitoring:
+  # Heartbeat monitoring: alert if bot hasn't sent heartbeat in X seconds
+  heartbeat_timeout: 300  # 5 minutes
+  
+  # Heartbeat check interval (seconds) - how often to check for missing heartbeats
+  heartbeat_check_interval: 60  # 1 minute
+
+  # Silence further alerts for a bot after it stops (seconds). 0 = immediate
+  post_stop_silence_grace: 0
+  
+  # Log file location
+  log_file: "logs/hb-monitor.log"
+  
+  # Log level for the monitor service itself
+  log_level: "INFO"
+

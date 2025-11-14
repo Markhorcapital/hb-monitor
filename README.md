@@ -72,6 +72,9 @@ docker compose ps
 
 # Remove stopped containers + networks + images (cleanup)
 docker compose down --rmi all --volumes
+
+
+docker compose restart
 ```
 
 > These commands should be run from the `hb-monitor` directory on the server (the same folder that contains `docker-compose.yml`).

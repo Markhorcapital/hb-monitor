@@ -9,10 +9,6 @@ from pathlib import Path
 
 def setup_logger(log_file: str = "logs/hb-monitor.log", log_level: str = "INFO"):
     """Setup logging configuration."""
-    # Create logs directory if it doesn't exist
-    log_path = Path(log_file)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    
     # Configure logging
     level = getattr(logging, log_level.upper(), logging.INFO)
     
@@ -22,12 +18,7 @@ def setup_logger(log_file: str = "logs/hb-monitor.log", log_level: str = "INFO")
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # File handler
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(level)
-    file_handler.setFormatter(formatter)
-    
-    # Console handler
+    # Console handler (always available)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
@@ -35,8 +26,22 @@ def setup_logger(log_file: str = "logs/hb-monitor.log", log_level: str = "INFO")
     # Root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
-    root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
+    
+    # File handler (try to create, but don't fail if permissions are wrong)
+    try:
+        # Create logs directory if it doesn't exist
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Try to create file handler
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+    except (PermissionError, OSError) as e:
+        # If we can't write to the log file, just log to console
+        root_logger.warning(f"Could not create log file {log_file}: {e}. Logging to console only.")
     
     # Reduce noise from third-party libraries
     logging.getLogger("aiomqtt").setLevel(logging.WARNING)

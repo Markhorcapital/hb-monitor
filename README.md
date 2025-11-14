@@ -49,7 +49,32 @@ docker compose up -d
 docker compose logs -f
 ```
 
-**For detailed Docker deployment instructions, see [README_DEPLOYMENT.md](README_DEPLOYMENT.md)**
+Common Docker commands you’ll use while operating the monitor:
+
+```bash
+# Build (or rebuild) the image
+docker compose build
+
+# Start in detached mode (build if needed)
+docker compose up -d --build
+
+# Stop containers but keep the network/volumes
+docker compose down
+
+# Follow container logs in real time
+docker compose logs -f
+
+# Tail only hb-monitor logs (when multiple services exist)
+docker compose logs -f hb-monitor
+
+# View container status
+docker compose ps
+
+# Remove stopped containers + networks + images (cleanup)
+docker compose down --rmi all --volumes
+```
+
+> These commands should be run from the `hb-monitor` directory on the server (the same folder that contains `docker-compose.yml`).
 
 ### Manual Installation (Python)
 

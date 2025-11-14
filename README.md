@@ -30,7 +30,32 @@ The service subscribes to MQTT topics:
 
 ## Getting Started
 
-### 1. Installation
+### Quick Start with Docker (Recommended)
+
+The easiest way to deploy `hb-monitor` is using Docker Compose:
+
+```bash
+# 1. Clone and navigate
+cd hb-monitor
+
+# 2. Configure
+cp config.example.yml config.yml
+nano config.yml  # Edit with your Telegram bot token and MQTT settings
+
+# 3. Deploy
+docker compose up -d
+
+# 4. View logs
+docker compose logs -f
+```
+
+**For detailed Docker deployment instructions, see [README_DEPLOYMENT.md](README_DEPLOYMENT.md)**
+
+### Manual Installation (Python)
+
+If you prefer to run without Docker:
+
+#### 1. Installation
 
 Clone the repository (or copy the `hb-monitor` folder into your workspace) and install dependencies:
 
@@ -39,7 +64,7 @@ cd hb-monitor
 pip install -r requirements.txt
 ```
 
-### 2. Configure
+#### 2. Configure
 
 Create a configuration file from the example and adjust it to your environment:
 
@@ -55,7 +80,7 @@ Important sections (explained in detail below):
 - `filters.log_filter.pattern`: regex allow-list that every message must match before it can alert
 - `subscriptions`: comment/uncomment topics to control what is monitored
 
-### 3. Run
+#### 3. Run
 
 Start the monitor with the configuration you created:
 

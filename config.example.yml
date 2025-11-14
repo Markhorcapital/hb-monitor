@@ -1,7 +1,9 @@
 mqtt:
   # MQTT broker connection settings
-  # Use "emqx" when running in Docker, "localhost" when standalone or via SSH tunnel
-  host: "emqx"
+  # - "localhost" or "127.0.0.1" when using Docker with host network mode (default)
+  # - "emqx" when using Docker with external network (uncomment network section in docker-compose.yml)
+  # - "localhost" when running standalone Python script (via SSH tunnel or local)
+  host: "localhost"
   port: 1883
   # Optional authentication (leave empty if not configured)
   username: ""

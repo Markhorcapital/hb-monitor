@@ -1,0 +1,33 @@
+services:
+  hb-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hb-monitor
+    restart: unless-stopped
+    volumes:
+      # Mount config file (read-only for security)
+      - ./config.yml:/app/config.yml:ro
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+    environment:
+      - CONFIG_PATH=/app/config.yml
+    # Option 1: Use host network to connect to EMQX on localhost:1883
+    # This works when EMQX is exposed on host ports (as in your deploy setup)
+    network_mode: host
+    # Option 2: Connect to external EMQX network (uncomment if preferred)
+    # networks:
+    #   - emqx-bridge
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Uncomment if using Option 2 (external network):
+# networks:
+#   emqx-bridge:
+#     external: true
+#     name: deploy_emqx-bridge
+

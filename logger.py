@@ -3,7 +3,7 @@ Logging configuration for the monitor service.
 """
 
 import logging
-import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
@@ -35,7 +35,13 @@ def setup_logger(log_file: str = "logs/hb-monitor.log", log_level: str = "INFO")
         log_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Try to create file handler
-        file_handler = logging.FileHandler(log_file)
+        # Rotate at ~1 GB to cap disk usage (one backup for recent history)
+        max_bytes = 1024 * 1024 * 1024  # 1 GB
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=max_bytes,
+            backupCount=1,
+        )
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)

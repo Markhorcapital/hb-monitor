@@ -47,6 +47,7 @@ class HummingbotMonitor:
         self.bot_statuses: Dict[str, str] = {}
         self.processed_events: Dict[str, float] = {}
         self.bot_offline_since: Dict[str, float] = {}
+        self.heartbeat_alerted: Set[str] = set()
         
         # MQTT connection
         self.client: Optional[aiomqtt.Client] = None
@@ -119,6 +120,8 @@ class HummingbotMonitor:
     def _record_online(self, bot_id: str):
         """Clear offline state when bot restarts."""
         self.bot_offline_since.pop(bot_id, None)
+        self.heartbeat_alerted.discard(bot_id)
+        self.processed_events.pop(f"{bot_id}:heartbeat_timeout", None)
     
     def _passes_regex_filter(self, message: str) -> bool:
         """Check whether the configured regex (if any) allows this message."""
@@ -378,6 +381,8 @@ class HummingbotMonitor:
             return
         
         self.bot_heartbeats[bot_id] = time.time()
+        self.heartbeat_alerted.discard(bot_id)
+        self.processed_events.pop(f"{bot_id}:heartbeat_timeout", None)
         logger.debug(f"[{bot_id}] Heartbeat received")
     
     async def _handle_events(self, bot_id: str, data: dict, topic: str):
@@ -412,7 +417,8 @@ class HummingbotMonitor:
                         source=topic
                     )
             
-            logger.info(f"[{bot_id}] EVENT {event_type}: {event_str}")
+            # Commented out to suppress verbose trade event logs in the console.
+            # logger.info(f"[{bot_id}] EVENT {event_type}: {event_str}")
             
         except Exception as e:
             logger.error(f"Error handling event from {bot_id}: {e}")
@@ -423,6 +429,8 @@ class HummingbotMonitor:
         current_time = time.time()
         
         for bot_id, last_heartbeat in list(self.bot_heartbeats.items()):
+            if bot_id in self.heartbeat_alerted:
+                continue
             if current_time - last_heartbeat > timeout:
                 # Check if bot is marked as offline (crashed) or just network issue
                 bot_status = self.bot_statuses.get(bot_id, "unknown")
@@ -444,6 +452,7 @@ class HummingbotMonitor:
                         timestamp=current_time,
                         source="hbot/+/hb (timeout)"
                     )
+                    self.heartbeat_alerted.add(bot_id)
                     self._record_offline(bot_id, current_time)
                 logger.warning(f"[{bot_id}] Heartbeat timeout")
     

@@ -57,7 +57,10 @@ class HummingbotMonitor:
                 "user stream",
                 "websocket",
                 "Listen key",
-                "Executor ID"
+                "Executor ID",
+                "trading",
+                "instruments",
+                "Subscribed",
 
             ],
         )
@@ -479,13 +482,31 @@ class HummingbotMonitor:
                 # Check if bot is marked as offline (crashed) or just network issue
                 bot_status = self.bot_statuses.get(bot_id, "unknown")
                 container_name = bot_id
-                
+                elapsed_seconds = int(current_time - last_heartbeat)
+                elapsed_minutes = elapsed_seconds / 60
+                if elapsed_minutes >= 1:
+                    last_heartbeat_display = f"{elapsed_minutes:.1f} minutes ago"
+                else:
+                    last_heartbeat_display = f"{elapsed_seconds} seconds ago"
+
                 if bot_status == "offline":
                     # Bot is offline and no heartbeat = likely crashed
-                    alert_message = f"💥 Bot Crashed (No Heartbeat)\n\nContainer: {container_name}\nLast heartbeat: {int(current_time - last_heartbeat)} seconds ago\nStatus: Offline\n\nBot appears to have crashed or stopped unexpectedly."
+                    alert_message = (
+                        "💥 Bot Crashed (No Heartbeat)\n\n"
+                        f"Container: {container_name}\n"
+                        f"Last heartbeat: {last_heartbeat_display}\n"
+                        "Status: Offline\n\n"
+                        "Bot appears to have crashed or stopped unexpectedly."
+                    )
                 else:
                     # Bot might still be running but not sending heartbeats (network issue?)
-                    alert_message = f"⚠️ Bot Heartbeat Timeout\n\nContainer: {container_name}\nLast heartbeat: {int(current_time - last_heartbeat)} seconds ago\nStatus: {bot_status}\n\nBot may have crashed or network issue."
+                    alert_message = (
+                        "⚠️ Bot Heartbeat Timeout\n\n"
+                        f"Container: {container_name}\n"
+                        f"Last heartbeat: {last_heartbeat_display}\n"
+                        f"Status: {bot_status}\n\n"
+                        "Bot may have crashed or network issue."
+                    )
                 
                 event_key = f"{bot_id}:heartbeat_timeout"
                 if not self._is_duplicate(event_key):

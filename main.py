@@ -41,6 +41,33 @@ class HummingbotMonitor:
         log_filter_cfg = self.filters.get("log_filter", {})
         pattern = log_filter_cfg.get("pattern", "")
         self.log_alert_pattern = re.compile(pattern, re.IGNORECASE) if pattern else None
+        console_trade_cfg = self.monitoring.get("console_trade_filter", {})
+        self.suppress_trade_console_logs = console_trade_cfg.get("suppress", True)
+        trade_keywords = console_trade_cfg.get(
+            "keywords",
+            [
+                "order",
+                "trade",
+                "filled",
+                "position",
+                "budget",
+                "buy",
+                "sell",
+                "rate oracle",
+                "user stream",
+                "websocket",
+                "Listen key",
+                "Executor ID"
+
+            ],
+        )
+        self.trade_console_keywords: Set[str] = {
+            keyword.lower() for keyword in trade_keywords if isinstance(keyword, str) and keyword
+        }
+        pattern_str = console_trade_cfg.get("pattern")
+        self.trade_console_pattern = (
+            re.compile(pattern_str, re.IGNORECASE) if pattern_str else None
+        )
         
         # Bot state tracking
         self.bot_heartbeats: Dict[str, float] = {}
@@ -171,6 +198,20 @@ class HummingbotMonitor:
         
         # If the regex matched but no keywords are configured that match, allow alert
         return pattern_matched
+
+    def _is_trade_console_log(self, message: Optional[str]) -> bool:
+        """Determine whether a log message should be suppressed for console output."""
+        if not self.suppress_trade_console_logs:
+            return False
+        if not message:
+            return False
+        normalized = message if isinstance(message, str) else str(message)
+        normalized_lower = normalized.lower()
+        if self.trade_console_pattern and self.trade_console_pattern.search(normalized):
+            return True
+        if self.trade_console_keywords:
+            return any(keyword in normalized_lower for keyword in self.trade_console_keywords)
+        return False
     
     def _is_duplicate(self, event_key: str) -> bool:
         """Check if we've already processed this event recently."""
@@ -251,7 +292,10 @@ class HummingbotMonitor:
                             source=topic
                         )
             
-            logger.info(f"[{bot_id}] LOG {level}: {message}")
+            if not self._is_trade_console_log(message):
+                logger.info(f"[{bot_id}] LOG {level}: {message}")
+            else:
+                logger.debug(f"[{bot_id}] Trade log suppressed from console: {message}")
             
         except Exception as e:
             logger.error(f"Error handling log from {bot_id}: {e}")

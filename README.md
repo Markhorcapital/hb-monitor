@@ -228,6 +228,10 @@ monitoring:
   heartbeat_timeout: 300          # seconds without a heartbeat before alerting
   heartbeat_check_interval: 60    # how often to evaluate heartbeat status
   post_stop_silence_grace: 0      # suppress further alerts for the bot after stop (0 = immediate)
+  console_trade_filter:
+    suppress: true                # avoid printing trade/order noise to stdout
+    keywords: ["order", "trade", "position", "filled", "budget"]
+    # pattern: "(order|trade|budget)"  # optional regex override for finer control
 
 subscriptions:
   # Comment/uncomment to control which MQTT topics are monitored.
@@ -249,6 +253,7 @@ subscriptions:
 - The monitor always prints every received message to stdout/log files for visibility; Telegram alerts remain gated by the regex and keyword filters.
 - To reduce noise from exchange connection retries or balance warnings, tighten the regex or comment out topics you do not care about.
 - Heartbeat alerts are handled separately via `heartbeat_timeout` and do not require the raw heartbeat topic to be enabled.
+- To keep terminal output readable, `console_trade_filter` suppresses trade/order-specific log lines from stdout while still allowing alerts and file logging. Adjust the keywords or regex to suit your environment (set `suppress: false` to disable).
 
 ## Telegram Integration & Security
 

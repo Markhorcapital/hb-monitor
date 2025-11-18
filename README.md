@@ -104,6 +104,7 @@ Important sections (explained in detail below):
 
 - `mqtt`: broker location and credentials
 - `alerts.telegram`: bot token and chat id
+- `alerts.telegram.source_aliases`: optional map to rewrite topic prefixes (e.g., `"hbot/" -> "agent/"`) before they show up in Telegram `Source` lines
 - `filters.log_levels`: allowed severities for log-topic payloads (keep `INFO` so first-run/start/stop summaries surface)
 - `filters.log_filter.pattern`: regex allow-list that every message must match before it can alert
 - `subscriptions`: comment/uncomment topics to control what is monitored

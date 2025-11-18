@@ -18,6 +18,18 @@ class AlertManager:
     def __init__(self, alert_config: dict):
         self.config = alert_config
         self.telegram_config = alert_config.get("telegram", {})
+        self.source_aliases = self.telegram_config.get("source_aliases", {})
+
+    def _alias_source(self, source: Optional[str]) -> str:
+        """Apply optional source alias replacements."""
+        if source is None:
+            return "N/A"
+        alias_source = str(source)
+        if isinstance(self.source_aliases, dict):
+            for original, replacement in self.source_aliases.items():
+                if original and alias_source.startswith(original):
+                    alias_source = replacement + alias_source[len(original):]
+        return alias_source
         
     def _escape_markdown(self, text: str) -> str:
         """Escape characters that break Telegram Markdown (v1)."""
@@ -50,7 +62,7 @@ class AlertManager:
     ) -> str:
         """Format alert message."""
         timestamp_str = datetime.fromtimestamp(timestamp or 0).strftime("%Y-%m-%d %H:%M:%S") if timestamp else "N/A"
-        source_str = source or "N/A"
+        source_str = self._alias_source(source)
         bot_id_str = bot_id
         alert_type_str = alert_type
         message_str = message
@@ -112,7 +124,7 @@ class AlertManager:
         if not use_markdown:
             sections = [
                 f"{emoji} {title}",
-                f"Bot: {bot_id_str}",
+                f"Agent: {bot_id_str}",
             ]
             if alert_type != "status":
                 sections.append(f"Type: {alert_type_str}")
@@ -127,7 +139,7 @@ class AlertManager:
         header_lines = [
             f"{emoji} *{title}*",
             "",
-            f"*Bot:* `{bot_id_str}`",
+            f"*Agent:* `{bot_id_str}`",
         ]
         if alert_type != "status":
             header_lines.append(f"*Type:* {alert_type_str}")

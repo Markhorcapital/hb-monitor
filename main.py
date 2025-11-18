@@ -267,7 +267,7 @@ class HummingbotMonitor:
                     event_key = f"{bot_id}:status:stopped:strategy"
                     if not self._is_duplicate(event_key):
                         stop_message = (
-                            "ℹ️ Bot Stopped\n\n"
+                            "ℹ️ Agent Stopped\n\n"
                             f"Container: {container_name}\n"
                             "Status: offline\n"
                             "Detail: Strategy stopped successfully.\n"
@@ -380,19 +380,19 @@ class HummingbotMonitor:
             if normalized_status == "offline" and old_status != "offline":
                 should_alert = True
                 severity = "INFO"
-                alert_message = f"ℹ️ Bot Stopped\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nBot is no longer running."
+                alert_message = f"ℹ️ Agent Stopped\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nAgent is no longer running."
             
             # Bot came online/started
             elif normalized_status == "online" and old_status != "online":
                 should_alert = True
                 severity = "INFO"
-                alert_message = f"✅ Bot Started\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nBot is now running."
+                alert_message = f"✅ Agent Started\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nAgent is now running."
             
             # Other critical status changes
             elif any(keyword in status_lower for keyword in ["error", "failed", "crashed"]):
                 should_alert = True
                 severity = "ERROR"
-                alert_message = f"⚠️ Bot Status Change\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nCritical status change detected."
+                alert_message = f"⚠️ Agent Status Change\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nCritical status change detected."
             
             if should_alert:
                 status_filter_payload = f"{status_type} {status_msg}".strip()
@@ -492,20 +492,20 @@ class HummingbotMonitor:
                 if bot_status == "offline":
                     # Bot is offline and no heartbeat = likely crashed
                     alert_message = (
-                        "💥 Bot Crashed (No Heartbeat)\n\n"
+                        "💥 Agent Crashed (No Heartbeat)\n\n"
                         f"Container: {container_name}\n"
                         f"Last heartbeat: {last_heartbeat_display}\n"
                         "Status: Offline\n\n"
-                        "Bot appears to have crashed or stopped unexpectedly."
+                        "Agent appears to have crashed or stopped unexpectedly."
                     )
                 else:
                     # Bot might still be running but not sending heartbeats (network issue?)
                     alert_message = (
-                        "⚠️ Bot Heartbeat Timeout\n\n"
+                        "⚠️ Agent Heartbeat Timeout\n\n"
                         f"Container: {container_name}\n"
                         f"Last heartbeat: {last_heartbeat_display}\n"
                         f"Status: {bot_status}\n\n"
-                        "Bot may have crashed or network issue."
+                        "Agent may have crashed or network issue."
                     )
                 
                 event_key = f"{bot_id}:heartbeat_timeout"

@@ -24,6 +24,9 @@ alerts:
      # chat_id: "-1003432776090"
     # Optional: Format messages with markdown
     use_markdown: true
+    # Optional: Remap MQTT topic prefixes when showing Source in Telegram alerts
+    # source_aliases:
+    #   "hbot/": "agent/"
 
 filters:
   # Only monitor these bot IDs (empty list = monitor all bots)

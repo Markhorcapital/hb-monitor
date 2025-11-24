@@ -216,9 +216,9 @@ class HummingbotMonitor:
             return any(keyword in normalized_lower for keyword in self.trade_console_keywords)
         return False
     
-    def _is_duplicate(self, event_key: str) -> bool:
+    def _is_duplicate(self, event_key: str, custom_window: Optional[int] = None) -> bool:
         """Check if we've already processed this event recently."""
-        window = self.filters.get("deduplication_window", 300)
+        window = custom_window if custom_window is not None else self.filters.get("deduplication_window", 300)
         current_time = time.time()
         
         if event_key in self.processed_events:
@@ -263,8 +263,8 @@ class HummingbotMonitor:
                 message_lower = message.lower()
 
                 # Treat clean shutdown logs as a status alert to keep formatting consistent
-                if "strategy stopped successfully" in message_lower:
-                    event_key = f"{bot_id}:status:stopped:strategy"
+                if "strategy stopped successfully" in message_lower or "bot stopped" in message_lower:
+                    event_key = f"{bot_id}:status:offline:stopped"
                     if not self._is_duplicate(event_key):
                         stop_message = (
                             "ℹ️ Agent Stopped\n\n"
@@ -281,6 +281,76 @@ class HummingbotMonitor:
                             source=topic
                         )
                         self._record_offline(bot_id, normalized_ts)
+                # Detect GLOBAL drawdown events (highest priority - stops entire strategy)
+                elif "global drawdown reached" in message_lower:
+                    event_key = f"{bot_id}:global_drawdown"
+                    if not self._is_duplicate(event_key):
+                        drawdown_message = (
+                            "🚨 GLOBAL DRAWDOWN REACHED\n\n"
+                            f"Container: {container_name}\n"
+                            f"Level: CRITICAL\n"
+                            "Type: Global Strategy Drawdown\n\n"
+                            "⚠️ The entire strategy has reached max global drawdown.\n"
+                            "All controllers are being stopped.\n\n"
+                            f"Details: {message}"
+                        )
+                        await self.alert_manager.send_alert(
+                            bot_id=container_name,
+                            alert_type="global_drawdown",
+                            level="ERROR",
+                            message=drawdown_message,
+                            timestamp=timestamp,
+                            source=topic
+                        )
+                # Detect CONTROLLER drawdown events (individual controller stopped)
+                elif "controller" in message_lower and "reached max drawdown" in message_lower:
+                    # Extract controller ID from message like "Controller bearish_gate_200bp_0.1 reached max drawdown"
+                    controller_id = "unknown"
+                    try:
+                        parts = message.split("Controller ")
+                        if len(parts) > 1:
+                            controller_id = parts[1].split(" reached")[0].strip()
+                    except:
+                        pass
+                    
+                    event_key = f"{bot_id}:controller_drawdown:{controller_id}"
+                    if not self._is_duplicate(event_key):
+                        drawdown_message = (
+                            "⚠️ Controller Drawdown Reached\n\n"
+                            f"Container: {container_name}\n"
+                            f"Controller: {controller_id}\n"
+                            f"Level: WARNING\n"
+                            "Type: Controller Drawdown\n\n"
+                            "This controller has reached max drawdown and is being stopped.\n"
+                            "Other controllers may continue running.\n\n"
+                            f"Details: {message}"
+                        )
+                        await self.alert_manager.send_alert(
+                            bot_id=container_name,
+                            alert_type="controller_drawdown",
+                            level="WARNING",
+                            message=drawdown_message,
+                            timestamp=timestamp,
+                            source=topic
+                        )
+                # Catch any other drawdown-related messages
+                elif "drawdown" in message_lower and ("reached" in message_lower or "stopping" in message_lower):
+                    event_key = f"{bot_id}:drawdown:{message[:50]}"
+                    if not self._is_duplicate(event_key):
+                        drawdown_message = (
+                            "⚠️ Drawdown Event\n\n"
+                            f"Container: {container_name}\n"
+                            f"Level: {level}\n\n"
+                            f"{message}"
+                        )
+                        await self.alert_manager.send_alert(
+                            bot_id=container_name,
+                            alert_type="drawdown",
+                            level="WARNING",
+                            message=drawdown_message,
+                            timestamp=timestamp,
+                            source=topic
+                        )
                 else:
                     alert_message = f"Container: {container_name}\nLevel: {level}\n\n{message}"
                     
@@ -376,13 +446,13 @@ class HummingbotMonitor:
             should_alert = False
             alert_message = ""
             
-            # Bot went offline/stopped
+            # Bot went offline/stopped - CRITICAL EVENT, always alert
             if normalized_status == "offline" and old_status != "offline":
                 should_alert = True
-                severity = "INFO"
-                alert_message = f"ℹ️ Agent Stopped\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nAgent is no longer running."
+                severity = "WARNING"
+                alert_message = f"🛑 Agent Stopped\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nAgent is no longer running."
             
-            # Bot came online/started
+            # Bot came online/started - CRITICAL EVENT, always alert
             elif normalized_status == "online" and old_status != "online":
                 should_alert = True
                 severity = "INFO"
@@ -395,22 +465,20 @@ class HummingbotMonitor:
                 alert_message = f"⚠️ Agent Status Change\n\nContainer: {container_name}\nStatus: {status_msg}\nType: {status_type}\n\nCritical status change detected."
             
             if should_alert:
-                status_filter_payload = f"{status_type} {status_msg}".strip()
-                if self._passes_regex_filter(status_filter_payload):
-                    event_key = f"{bot_id}:status:{status_type}:{status_msg}"
-                    if not self._is_duplicate(event_key):
-                        await self.alert_manager.send_alert(
-                            bot_id=container_name,  # Use container name in alert
-                            alert_type="status",
-                            message=alert_message,
-                            level=severity,
-                            timestamp=timestamp / 1000 if timestamp > 1e10 else timestamp,  # Convert ms to seconds if needed
-                            source=topic
-                        )
-                    else:
-                        logger.debug(f"[{bot_id}] Duplicate status alert suppressed: {status_type} - {status_msg}")
+                # Status updates (start/stop) should NOT be filtered by log regex pattern
+                # Only check for duplicates
+                event_key = f"{bot_id}:status:{normalized_status}:{status_type}"
+                if not self._is_duplicate(event_key):
+                    await self.alert_manager.send_alert(
+                        bot_id=container_name,  # Use container name in alert
+                        alert_type="status",
+                        message=alert_message,
+                        level=severity,
+                        timestamp=timestamp / 1000 if timestamp > 1e10 else timestamp,  # Convert ms to seconds if needed
+                        source=topic
+                    )
                 else:
-                    logger.debug(f"[{bot_id}] Status update suppressed by regex filter: {status_filter_payload}")
+                    logger.debug(f"[{bot_id}] Duplicate status alert suppressed: {status_type} - {status_msg}")
             
             self.bot_statuses[bot_id] = normalized_status
             if normalized_status == "offline":

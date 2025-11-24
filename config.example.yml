@@ -26,7 +26,7 @@ alerts:
     use_markdown: true
     # Optional: Remap MQTT topic prefixes when showing Source in Telegram alerts
     # source_aliases:
-    #   "hbot/": "agent/"
+      # "hbot/": "agent/"
 
 filters:
   # Only monitor these bot IDs (empty list = monitor all bots)
@@ -41,6 +41,7 @@ filters:
     - "drawdown"
     - "reached max drawdown"
     - "Global drawdown reached"
+    - "Controller"  # Added to catch controller-specific events
     - "stopping the strategy"
     - "stopping the controller"
     - "error"
@@ -50,8 +51,8 @@ filters:
     - "crashed"
   
   # Deduplication: prevent duplicate alerts for same event
-  # Time window in seconds
-  deduplication_window: 300
+  # Time window in seconds (reduced from 300 to 180 for faster critical event alerts)
+  deduplication_window: 180
   
   # Ignore these keywords (to reduce noise)
   ignore_keywords:
@@ -59,10 +60,11 @@ filters:
     - "heartbeat"
     - "clock stopped successfully"
 
-  # Optional regex filter applied to every channel (case-insensitive).
-  # Only messages matching this pattern are eligible to trigger Telegram alerts.
+  # Optional regex filter applied ONLY to log channel (case-insensitive).
+  # Status updates (start/stop) are NOT filtered by this pattern.
+  # Only log messages matching this pattern are eligible to trigger Telegram alerts.
   log_filter:
-    pattern: "(drawdown|draw\\s*down|max drawdown|stopping the strategy|stopping the controller|strategy stopped successfully|clock stopped successfully|bot stopped|bot started|offline|online|heartbeat timeout|crashed)"
+    pattern: "(drawdown|draw\\s*down|max drawdown|global drawdown|controller.*drawdown|stopping the strategy|stopping the controller|strategy stopped successfully|clock stopped successfully|bot stopped|bot started|error|failed|exception|crashed)"
 
 subscriptions:
   # Comment out any topics you don't want to subscribe to

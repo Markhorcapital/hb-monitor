@@ -18,15 +18,129 @@ A monitoring service that subscribes to Hummingbot MQTT events and sends real-ti
 
 ## Architecture
 
+### High-Level Overview
+
+```mermaid
+graph LR
+    A[Hummingbot Bot 1] -->|MQTT Publish| B[EMQX Broker]
+    C[Hummingbot Bot 2] -->|MQTT Publish| B
+    D[Hummingbot Bot N] -->|MQTT Publish| B
+    B -->|MQTT Subscribe| E[hb-monitor]
+    E -->|HTTPS API| F[Telegram]
+    F -->|Push Notification| G[Your Phone/Desktop]
+    
+    style E fill:#4CAF50,stroke:#2E7D32,stroke-width:3px,color:#fff
+    style B fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
+    style F fill:#2196F3,stroke:#0D47A1,stroke-width:2px,color:#fff
 ```
-Hummingbot Instances → EMQX MQTT Broker → hb-monitor → Telegram
+
+### MQTT Topics Architecture
+
+```mermaid
+graph TD
+    A[EMQX MQTT Broker] --> B[hbot/+/log]
+    A --> C[hbot/+/status_updates]
+    A --> D[hbot/+/notify]
+    A --> E[hbot/+/events]
+    A --> F[hbot/+/hb]
+    
+    B -->|Log Messages| G[hb-monitor]
+    C -->|Start/Stop Events| G
+    D -->|Notifications| G
+    E -->|Trading Events| G
+    F -->|Heartbeat| G
+    
+    G --> H{Event Detection}
+    H -->|Drawdown| I[Alert Manager]
+    H -->|Bot Stop/Start| I
+    H -->|Errors| I
+    H -->|Heartbeat Timeout| I
+    
+    I --> J[Telegram API]
+    
+    style G fill:#4CAF50,stroke:#2E7D32,stroke-width:3px,color:#fff
+    style H fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
+    style I fill:#9C27B0,stroke:#4A148C,stroke-width:2px,color:#fff
 ```
 
 The service subscribes to MQTT topics:
-- `hbot/+/log` - Bot log messages
+- `hbot/+/log` - Bot log messages (INFO, WARNING, ERROR)
 - `hbot/+/notify` - User notifications
-- `hbot/+/status_updates` - Bot status changes
-- `hbot/+/events` - Internal events
+- `hbot/+/status_updates` - Bot status changes (start/stop)
+- `hbot/+/events` - Internal trading events
+- `hbot/+/hb` - Heartbeat messages (every 60s)
+
+## Event Detection Flow
+
+### Bot Lifecycle Monitoring
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unknown
+    Unknown --> Online: Bot Started
+    Online --> Offline: Bot Stopped
+    Offline --> Online: Bot Restarted
+    
+    Online --> HeartbeatTimeout: No heartbeat\n(5 minutes)
+    HeartbeatTimeout --> Online: Heartbeat Received
+    HeartbeatTimeout --> Crashed: Still no heartbeat
+    
+    note right of Online
+        ✅ Agent Started
+        INFO Level Alert
+    end note
+    
+    note right of Offline
+        🛑 Agent Stopped
+        WARNING Level Alert
+    end note
+    
+    note right of HeartbeatTimeout
+        ⚠️ Heartbeat Timeout
+        WARNING Level Alert
+    end note
+    
+    note right of Crashed
+        💥 Agent Crashed
+        ERROR Level Alert
+    end note
+```
+
+### Alert Priority & Routing
+
+```mermaid
+graph TD
+    A[Event Detected] --> B{Event Type}
+    
+    B -->|Global Drawdown| C[Priority: CRITICAL<br/>Level: ERROR<br/>Emoji: 🚨]
+    B -->|Bot Crashed| D[Priority: HIGH<br/>Level: ERROR<br/>Emoji: 💥]
+    B -->|Controller Drawdown| E[Priority: MEDIUM<br/>Level: WARNING<br/>Emoji: ⚠️]
+    B -->|Bot Stopped| F[Priority: MEDIUM<br/>Level: WARNING<br/>Emoji: 🛑]
+    B -->|Heartbeat Timeout| G[Priority: MEDIUM<br/>Level: WARNING<br/>Emoji: ⚠️]
+    B -->|Bot Started| H[Priority: LOW<br/>Level: INFO<br/>Emoji: ✅]
+    B -->|Generic Error| I[Priority: MEDIUM<br/>Level: ERROR<br/>Emoji: 🔴]
+    
+    C --> J[Format Message]
+    D --> J
+    E --> J
+    F --> J
+    G --> J
+    H --> J
+    I --> J
+    
+    J --> K{Deduplication<br/>Check}
+    K -->|First Time| L[Send to Telegram]
+    K -->|Duplicate<br/>within 3 min| M[Suppress]
+    
+    L --> N[Telegram Notification]
+    
+    style C fill:#f44336,stroke:#c62828,stroke-width:3px,color:#fff
+    style D fill:#f44336,stroke:#c62828,stroke-width:3px,color:#fff
+    style E fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    style F fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    style L fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
+    style N fill:#2196f3,stroke:#0d47a1,stroke-width:2px,color:#fff
+```
 
 ## Getting Started
 
@@ -178,6 +292,36 @@ CONFIG_PATH=/app/config.yml python main.py
 
 Docker Compose users can add a service pointing at `./hb-monitor` with `restart: unless-stopped`.
 
+## Deployment Architecture
+
+### Production Deployment Options
+
+```mermaid
+graph TB
+    subgraph "Option 1: Same Host as EMQX"
+        A1[hb-monitor] -->|localhost:1883| B1[EMQX]
+        C1[Hummingbot Bots] -->|localhost:1883| B1
+    end
+    
+    subgraph "Option 2: Separate Host"
+        A2[hb-monitor] -->|server-ip:1883| B2[EMQX]
+        C2[Hummingbot Bots] -->|server-ip:1883| B2
+    end
+    
+    subgraph "Option 3: Docker Compose"
+        A3[hb-monitor<br/>Container] -->|emqx:1883| B3[EMQX<br/>Container]
+        C3[Hummingbot<br/>Containers] -->|emqx:1883| B3
+    end
+    
+    A1 --> D[Telegram]
+    A2 --> D
+    A3 --> D
+    
+    style A1 fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
+    style A2 fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
+    style A3 fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
+```
+
 ## Configuration Reference
 
 The example file contains sane defaults and highlights optional sections:
@@ -248,6 +392,118 @@ subscriptions:
   #   qos: 1
 ```
 
+## Data Flow & Integration
+
+### Complete System Integration
+
+```mermaid
+sequenceDiagram
+    participant HB as Hummingbot Bot
+    participant EMQX as EMQX Broker
+    participant MON as hb-monitor
+    participant TG as Telegram API
+    participant USER as User Device
+    
+    Note over HB: Bot detects drawdown
+    HB->>EMQX: Publish to hbot/bot1/log<br/>"Controller X reached max drawdown"
+    EMQX->>MON: Forward message
+    
+    Note over MON: Process message
+    MON->>MON: Check filters
+    MON->>MON: Detect controller drawdown
+    MON->>MON: Check deduplication
+    MON->>MON: Format alert message
+    
+    MON->>TG: POST /sendMessage<br/>⚠️ Controller Drawdown Alert
+    TG->>USER: Push notification
+    
+    Note over USER: User sees alert on phone
+    
+    Note over HB: Bot continues running
+    HB->>EMQX: Publish heartbeat every 60s
+    EMQX->>MON: Forward heartbeat
+    MON->>MON: Update timestamp
+    
+    Note over MON: 5 minutes later...
+    alt No heartbeat received
+        MON->>MON: Detect timeout
+        MON->>TG: POST /sendMessage<br/>⚠️ Heartbeat Timeout
+        TG->>USER: Push notification
+    end
+```
+
+### Filtering & Deduplication Logic
+
+```mermaid
+flowchart TD
+    A[Message Received] --> B{Source Channel?}
+    
+    B -->|status_updates| C[Skip Regex Filter]
+    B -->|log| D[Apply Regex Filter]
+    B -->|notify| E[Apply Keyword Filter]
+    B -->|events| E
+    
+    C --> F{Status Changed?}
+    D --> G{Regex Match?}
+    E --> H{Keyword Match?}
+    
+    F -->|Yes| I[Generate Event Key]
+    G -->|Yes| J{Keyword Match?}
+    G -->|No| K[Skip]
+    J -->|Yes| I
+    J -->|No| K
+    H -->|Yes| I
+    H -->|No| K
+    
+    I --> L{Check Deduplication}
+    L -->|New Event| M[Send Alert]
+    L -->|Duplicate<br/>within 3 min| N[Suppress]
+    
+    M --> O[Store Event Key<br/>with Timestamp]
+    
+    style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
+    style M fill:#2196f3,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style K fill:#9e9e9e,stroke:#616161,stroke-width:1px,color:#fff
+    style N fill:#9e9e9e,stroke:#616161,stroke-width:1px,color:#fff
+```
+
+### State Management
+
+```mermaid
+graph TB
+    subgraph "In-Memory State"
+        A[bot_heartbeats<br/>Dict: bot_id → timestamp]
+        B[bot_statuses<br/>Dict: bot_id → status]
+        C[processed_events<br/>Dict: event_key → timestamp]
+        D[bot_offline_since<br/>Dict: bot_id → timestamp]
+        E[heartbeat_alerted<br/>Set: bot_ids]
+    end
+    
+    F[Heartbeat Message] --> A
+    G[Status Update] --> B
+    H[Any Alert] --> C
+    I[Bot Stopped] --> D
+    J[Timeout Alert] --> E
+    
+    A --> K[Heartbeat Checker<br/>Background Task]
+    K -->|Timeout Detected| L[Send Alert]
+    
+    B --> M[Status Change<br/>Detection]
+    M -->|Change Detected| L
+    
+    C --> N[Deduplication<br/>Check]
+    N -->|Duplicate| O[Suppress]
+    N -->|New| L
+    
+    D --> P[Post-Stop<br/>Silence]
+    P -->|Suppress Noise| O
+    
+    style A fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    style B fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    style C fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    style L fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
+```
+
 ### Log Filtering Strategy
 
 - Drawdown and strategy-stop events are published as log messages by the Hummingbot controllers (`v2_with_controllers.py`), so include those phrases in the regex allow-list.
@@ -255,6 +511,91 @@ subscriptions:
 - To reduce noise from exchange connection retries or balance warnings, tighten the regex or comment out topics you do not care about.
 - Heartbeat alerts are handled separately via `heartbeat_timeout` and do not require the raw heartbeat topic to be enabled.
 - To keep terminal output readable, `console_trade_filter` suppresses trade/order-specific log lines from stdout while still allowing alerts and file logging. Adjust the keywords or regex to suit your environment (set `suppress: false` to disable).
+
+## Alert Examples
+
+### Telegram Message Formats
+
+```mermaid
+graph LR
+    subgraph "Alert Types"
+        A[🚨 Global Drawdown<br/>ERROR]
+        B[⚠️ Controller Drawdown<br/>WARNING]
+        C[🛑 Bot Stopped<br/>WARNING]
+        D[✅ Bot Started<br/>INFO]
+        E[⚠️ Heartbeat Timeout<br/>WARNING]
+        F[💥 Bot Crashed<br/>ERROR]
+    end
+    
+    A --> G[Telegram Message]
+    B --> G
+    C --> G
+    D --> G
+    E --> G
+    F --> G
+    
+    G --> H[Your Phone]
+    G --> I[Your Desktop]
+    G --> J[Your Tablet]
+    
+    style A fill:#f44336,stroke:#c62828,stroke-width:3px,color:#fff
+    style B fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    style C fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    style D fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
+    style E fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    style F fill:#f44336,stroke:#c62828,stroke-width:3px,color:#fff
+```
+
+**Example Alert Messages:**
+
+**Global Drawdown (Most Critical):**
+```
+🚨 GLOBAL DRAWDOWN REACHED
+
+Container: PMM_GATE_200bp-20251113-0800
+Level: CRITICAL
+Type: Global Strategy Drawdown
+
+⚠️ The entire strategy has reached max global drawdown.
+All controllers are being stopped.
+
+Details: Global drawdown reached. Stopping the strategy.
+
+Source: agent/PMM_GATE_200bp-20251113-0800/log
+Time: 2025-11-19 17:46:31
+```
+
+**Controller Drawdown:**
+```
+⚠️ Controller Drawdown Reached
+
+Container: PMM_GATE_200bp-20251113-0800
+Controller: bearish_gate_200bp_0.1
+Level: WARNING
+Type: Controller Drawdown
+
+This controller has reached max drawdown and is being stopped.
+Other controllers may continue running.
+
+Details: Controller bearish_gate_200bp_0.1 reached max drawdown.
+
+Source: agent/PMM_GATE_200bp-20251113-0800/log
+Time: 2025-11-19 15:48:52
+```
+
+**Bot Started:**
+```
+✅ Agent Started
+
+Container: PMM_GATE_200-20251119-1747
+Status: online
+Type: availability
+
+Agent is now running.
+
+Source: agent/PMM_GATE_200-20251119-1747/status_updates
+Time: 2025-11-19 17:47:12
+```
 
 ## Telegram Integration & Security
 

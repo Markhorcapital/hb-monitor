@@ -44,6 +44,8 @@ filters:
     - "Controller"  # Added to catch controller-specific events
     - "stopping the strategy"
     - "stopping the controller"
+    - "stop command initiated"  # Detects manual stop via UI/CLI
+    - "stop command"  # Generic stop command detection
     - "error"
     - "failed"
     - "exception"
@@ -64,7 +66,7 @@ filters:
   # Status updates (start/stop) are NOT filtered by this pattern.
   # Only log messages matching this pattern are eligible to trigger Telegram alerts.
   log_filter:
-    pattern: "(drawdown|draw\\s*down|max drawdown|global drawdown|controller.*drawdown|stopping the strategy|stopping the controller|strategy stopped successfully|clock stopped successfully|bot stopped|bot started|error|failed|exception|crashed)"
+    pattern: "(drawdown|draw\\s*down|max drawdown|global drawdown|controller.*drawdown|stop command initiated|stop command|stopping the strategy|stopping the controller|strategy stopped successfully|clock stopped successfully|bot stopped|bot started|error|failed|exception|crashed)"
 
 subscriptions:
   # Comment out any topics you don't want to subscribe to

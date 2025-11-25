@@ -263,14 +263,25 @@ class HummingbotMonitor:
                 message_lower = message.lower()
 
                 # Treat clean shutdown logs as a status alert to keep formatting consistent
-                if "strategy stopped successfully" in message_lower or "bot stopped" in message_lower:
+                # Detect various stop messages: manual stop, successful shutdown, etc.
+                if ("strategy stopped successfully" in message_lower or 
+                    "bot stopped" in message_lower or 
+                    "stop command initiated" in message_lower):
                     event_key = f"{bot_id}:status:offline:stopped"
                     if not self._is_duplicate(event_key):
+                        # Determine the detail message based on what we detected
+                        if "stop command initiated" in message_lower:
+                            detail = "Stop command initiated by user."
+                        elif "strategy stopped successfully" in message_lower:
+                            detail = "Strategy stopped successfully."
+                        else:
+                            detail = "Bot stopped."
+                        
                         stop_message = (
-                            "ℹ️ Agent Stopped\n\n"
+                            "🛑 Agent Stopped\n\n"
                             f"Container: {container_name}\n"
                             "Status: offline\n"
-                            "Detail: Strategy stopped successfully.\n"
+                            f"Detail: {detail}\n"
                         )
                         await self.alert_manager.send_alert(
                             bot_id=container_name,

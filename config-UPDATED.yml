@@ -1,0 +1,86 @@
+mqtt:
+  # Server/SSH tunnel friendly defaults. Leave host as localhost when hb-monitor
+  # runs on the same EC2 instance as EMQX (recommended) or when the SSH tunnel
+  # forwards 1883 locally.
+  host: "localhost"
+  port: 1883
+  username: ""
+  password: ""
+  client_id_prefix: "hb-monitor-local"
+  keepalive: 60
+  reconnect_interval: 5
+
+alerts:
+  telegram:
+    enabled: true
+    bot_token: "8209363852:AAHJM7WOhyugVh1Rqh1ATgFX2SvKvheAK7M"
+    chat_id: "-1003432776090"
+    use_markdown: true
+    source_aliases:
+      "hbot/": "agent/"
+
+filters:
+  bot_ids: []
+  log_levels: ["ERROR", "WARNING", "INFO"]
+  alert_keywords:
+    - "drawdown"
+    - "reached max drawdown"
+    - "Global drawdown reached"
+    - "Controller"
+    - "stopping the strategy"
+    - "stopping the controller"
+    - "stop command initiated"  # NEW: Detects manual stop via UI/CLI
+    - "stop command"  # NEW: Generic stop command detection
+    - "error"
+    - "failed"
+    - "exception"
+    - "stopped"
+    - "crashed"
+  # Reduced deduplication window for critical events (stop/start/drawdown)
+  deduplication_window: 180
+  ignore_keywords:
+    - "DEBUG"
+    - "heartbeat"
+    - "clock stopped successfully"
+  # Log filter pattern - ONLY applies to log channel, NOT to status_updates
+  log_filter:
+    pattern: "(drawdown|draw\\s*down|max drawdown|global drawdown|controller.*drawdown|stop command initiated|stop command|stopping the strategy|stopping the controller|strategy stopped successfully|clock stopped successfully|bot stopped|bot started|error|failed|exception|crashed)"
+
+subscriptions:
+  - topic: "hbot/+/log"
+    qos: 1
+  - topic: "hbot/+/notify"
+    qos: 1
+  - topic: "hbot/+/status_updates"
+    qos: 1
+  - topic: "hbot/+/events"
+    qos: 1
+  - topic: "hbot/+/hb"
+    qos: 1
+
+monitoring:
+  heartbeat_timeout: 300
+  heartbeat_check_interval: 60
+  post_stop_silence_grace: 0
+  log_file: "logs/hb-monitor-local.log"
+  log_level: "INFO"
+
+  # Optional: Console trade log filtering to reduce noise from routine trading activity
+  console_trade_filter:
+    suppress: true
+    keywords:
+      - "order"
+      - "trade"
+      - "filled"
+      - "position"
+      - "budget"
+      - "buy"
+      - "sell"
+      - "rate oracle"
+      - "user stream"
+      - "websocket"
+      - "Listen key"
+      - "Executor ID"
+      - "trading"
+      - "instruments"
+      - "Subscribed"
